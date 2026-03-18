@@ -18,67 +18,59 @@ const App: React.FC = () => {
 
   // 批量识别品牌核心函数（调用 Netlify 服务端代理，无 API Key 泄露）
   const handleBatchAdd = async () => {
-    // 1. 处理输入的 URL 列表
-    const urls = batchInput
-      .split('\n')
-      .map(s => s.trim())
-      .filter(s => s.length > 0);
+  const urls = batchInput
+    .split('\n')
+    .map(s => s.trim())
+    .filter(s => s.length > 0);
 
-    if (urls.length === 0) {
-      alert('请输入至少一个 URL（每行一个）');
-      return;
+  if (urls.length === 0) {
+    alert('请输入至少一个 URL（每行一个）');
+    return;
+  }
+
+  setIsRecognizing(true);
+  try {
+    // 🔥 关键修改：调用新的 Netlify 函数地址
+    const response = await fetch('/.netlify/functions/brand-parser', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ urls }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || `请求失败（状态码：${response.status}）`);
     }
 
-    // 2. 开始识别，更新状态
-    setIsRecognizing(true);
-    try {
-      // 3. 调用自己的 Netlify 服务端代理接口
-      const response = await fetch('/.netlify/functions/gemini-proxy', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ urls }),
-      });
+    const results = await response.json();
 
-      // 4. 处理响应结果
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `请求失败（状态码：${response.status}）`);
+    // 格式化识别结果
+    const newCompetitors: Competitor[] = results.map((r: any) => {
+      let formattedUrl = r.url;
+      if (!formattedUrl.startsWith('http')) {
+        formattedUrl = `https://${formattedUrl}`;
       }
+      return {
+        id: Date.now() + Math.random().toString(36).substr(2, 9),
+        url: formattedUrl,
+        name: r.name || '未知品牌',
+        logo: '',
+        selected: false,
+      };
+    });
 
-      const results = await response.json();
+    setCompetitors(prev => [...prev, ...newCompetitors]);
+    setBatchInput('');
 
-      // 5. 格式化识别结果
-      const newCompetitors: Competitor[] = results.map((r: any) => {
-        // 补全 URL 协议头
-        let formattedUrl = r.url;
-        if (!formattedUrl.startsWith('http')) {
-          formattedUrl = `https://${formattedUrl}`;
-        }
-
-        return {
-          id: Date.now() + Math.random().toString(36).substr(2, 9),
-          url: formattedUrl,
-          name: r.name || '未知品牌',
-          logo: '',
-          selected: false,
-        };
-      });
-
-      // 6. 更新竞品列表，清空输入框
-      setCompetitors(prev => [...prev, ...newCompetitors]);
-      setBatchInput('');
-
-    } catch (e: any) {
-      // 错误提示
-      console.error('识别失败详情:', e);
-      alert(`识别失败：${e.message}`);
-    } finally {
-      // 结束识别，恢复按钮状态
-      setIsRecognizing(false);
-    }
-  };
+  } catch (e: any) {
+    console.error('识别失败详情:', e);
+    alert(`识别失败：${e.message}`);
+  } finally {
+    setIsRecognizing(false);
+  }
+};
 
   // 页面 UI 渲染
   return (
