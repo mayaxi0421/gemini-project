@@ -9,7 +9,8 @@ export const handler = async (event: any) => {
 
     const prompt = `Identify the brand name for each URL. Return only a JSON array with "url" and "name" fields. URLs: ${urls.join(', ')}`;
 
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${API_KEY}`, {
+    // 🔥 关键修改：改用 gemini-1.0-pro 模型
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.0-pro:generateContent?key=${API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
