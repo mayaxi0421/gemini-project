@@ -75,54 +75,33 @@ export default function App() {
 
   setIsRecognizing(true);
   try {
-    // 替换成你的真实 API Key（仅测试用，上线后改回环境变量）
-    const API_KEY = "AIzaSyDYbrn2n5xofpo8g5uwAe_56Pbvfsyqm9w";
+    // 直接写死你的真实 API Key（仅测试用）
+    const ai = new GoogleGenAI({ apiKey: "AIzaSyDYbrn2n5xofpo8g5uwAe_56Pbvfsyqm9w" });
     const prompt = `I have a list of website URLs. Please identify the brand or company name for each URL.
 Return ONLY a valid JSON array of objects with 'url' and 'name' properties. Do not include any markdown formatting or explanation.
 URLs:
 ${urls.join('\n')}`;
 
-    // 直接调用 Gemini REST API，绕过 SDK 浏览器限制
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${API_KEY}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [{ text: prompt }]
-            }
-          ],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 2048,
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  url: { type: "string", description: "The original URL" },
-                  name: { type: "string", description: "The recognized brand or company name" }
-                },
-                required: ["url", "name"]
-              }
-            }
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              url: { type: Type.STRING, description: "The original URL" },
+              name: { type: Type.STRING, description: "The recognized brand or company name" }
+            },
+            required: ["url", "name"]
           }
-        })
+        }
       }
-    );
+    });
 
-    if (!response.ok) {
-      throw new Error(`API 请求失败: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    const generatedText = data.candidates[0].content.parts[0].text;
-    const cleanText = (generatedText || '[]').replace(/^```json\n?/g, '').replace(/```\n?$/g, '').trim();
+    const cleanText = (response.text || '[]').replace(/^```json\n?/g, '').replace(/```\n?$/g, '').trim();
     const results = JSON.parse(cleanText);
 
     const newCompetitors: Competitor[] = results.map((r: any) => {
