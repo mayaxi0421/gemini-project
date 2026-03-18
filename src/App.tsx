@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { GoogleGenAI, Type } from '@google/genai';
 
-// 定义 Competitor 类型
+// 定义竞品类型接口（保证 TypeScript 类型安全）
 interface Competitor {
   id: string;
   url: string;
@@ -10,91 +9,97 @@ interface Competitor {
   selected: boolean;
 }
 
+// 主应用组件
 const App: React.FC = () => {
   // 核心状态管理
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
   const [batchInput, setBatchInput] = useState<string>('');
   const [isRecognizing, setIsRecognizing] = useState<boolean>(false);
 
-  // 批量识别品牌核心函数（读取 Netlify 环境变量，安全无泄露）
+  // 批量识别品牌核心函数（调用 Netlify 服务端代理，无 API Key 泄露）
   const handleBatchAdd = async () => {
-    const urls = batchInput.split('\n').map(s => s.trim()).filter(s => s.length > 0);
-    if (urls.length === 0) return;
+    // 1. 处理输入的 URL 列表
+    const urls = batchInput
+      .split('\n')
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
 
+    if (urls.length === 0) {
+      alert('请输入至少一个 URL（每行一个）');
+      return;
+    }
+
+    // 2. 开始识别，更新状态
     setIsRecognizing(true);
     try {
-      // 读取 Netlify 配置的环境变量（安全方式，无泄露风险）
-      const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-      
-      // 校验 API Key 是否存在
-      if (!API_KEY) {
-        throw new Error("API Key 未配置，请在 Netlify 中设置 VITE_GEMINI_API_KEY 环境变量");
-      }
-
-      const ai = new GoogleGenAI({ apiKey: API_KEY });
-      const prompt = `I have a list of website URLs. Please identify the brand or company name for each URL.
-Return ONLY a valid JSON array of objects with 'url' and 'name' properties. Do not include any markdown formatting or explanation.
-URLs:
-${urls.join('\n')}`;
-
-      // 调用 Gemini API 生成内容
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                url: { type: Type.STRING, description: "The original URL" },
-                name: { type: Type.STRING, description: "The recognized brand or company name" }
-              },
-              required: ["url", "name"]
-            }
-          }
-        }
+      // 3. 调用自己的 Netlify 服务端代理接口
+      const response = await fetch('/.netlify/functions/gemini-proxy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ urls }),
       });
 
-      // 解析返回结果
-      const cleanText = (response.text || '[]').replace(/^```json\n?/g, '').replace(/```\n?$/g, '').trim();
-      const results = JSON.parse(cleanText);
+      // 4. 处理响应结果
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `请求失败（状态码：${response.status}）`);
+      }
 
-      // 格式化竞品数据
+      const results = await response.json();
+
+      // 5. 格式化识别结果
       const newCompetitors: Competitor[] = results.map((r: any) => {
+        // 补全 URL 协议头
         let formattedUrl = r.url;
         if (!formattedUrl.startsWith('http')) {
           formattedUrl = `https://${formattedUrl}`;
         }
+
         return {
           id: Date.now() + Math.random().toString(36).substr(2, 9),
           url: formattedUrl,
-          name: r.name,
+          name: r.name || '未知品牌',
           logo: '',
-          selected: false
+          selected: false,
         };
       });
 
-      // 更新竞品列表
+      // 6. 更新竞品列表，清空输入框
       setCompetitors(prev => [...prev, ...newCompetitors]);
       setBatchInput('');
+
     } catch (e: any) {
-      console.error("识别失败详情:", e);
-      alert(`识别失败: ${e.message}\n请检查 API Key 是否有效或网络是否正常`);
+      // 错误提示
+      console.error('识别失败详情:', e);
+      alert(`识别失败：${e.message}`);
     } finally {
+      // 结束识别，恢复按钮状态
       setIsRecognizing(false);
     }
   };
 
-  // 页面渲染
+  // 页面 UI 渲染
   return (
-    <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto', fontFamily: 'Arial, sans-serif' }}>
-      <h1 style={{ color: '#165DFF', textAlign: 'center' }}>竞品品牌识别工具</h1>
-      
+    <div style={{ 
+      padding: '2rem', 
+      maxWidth: '900px', 
+      margin: '0 auto', 
+      fontFamily: 'system-ui, -apple-system, sans-serif' 
+    }}>
+      <h1 style={{ color: '#165DFF', textAlign: 'center', marginBottom: '2rem' }}>
+        竞品品牌批量识别工具
+      </h1>
+
       {/* 批量输入区域 */}
-      <div style={{ marginBottom: '20px' }}>
-        <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+      <div style={{ marginBottom: '2rem' }}>
+        <label style={{ 
+          display: 'block', 
+          marginBottom: '0.5rem', 
+          fontWeight: 600, 
+          color: '#333' 
+        }}>
           批量输入 URL（每行一个）：
         </label>
         <textarea
@@ -106,55 +111,80 @@ https://www.taobao.com
 https://www.tencent.com"
           style={{
             width: '100%',
-            height: '150px',
-            padding: '10px',
+            height: '180px',
+            padding: '1rem',
             fontSize: '14px',
-            border: '1px solid #ddd',
-            borderRadius: '4px',
-            resize: 'vertical'
+            border: '1px solid #e5e7eb',
+            borderRadius: '8px',
+            resize: 'vertical',
+            boxSizing: 'border-box'
           }}
         />
         <button
           onClick={handleBatchAdd}
           disabled={isRecognizing}
           style={{
-            marginTop: '10px',
-            padding: '10px 20px',
-            backgroundColor: isRecognizing ? '#999' : '#165DFF',
+            marginTop: '1rem',
+            padding: '0.75rem 2rem',
+            backgroundColor: isRecognizing ? '#94a3b8' : '#165DFF',
             color: 'white',
             border: 'none',
-            borderRadius: '4px',
+            borderRadius: '8px',
             cursor: isRecognizing ? 'not-allowed' : 'pointer',
-            fontSize: '14px'
+            fontSize: '16px',
+            fontWeight: 500,
+            transition: 'background-color 0.2s'
           }}
         >
           {isRecognizing ? '识别中...' : '批量识别品牌'}
         </button>
       </div>
 
-      {/* 识别结果展示 */}
-      <div style={{ borderTop: '1px solid #eee', paddingTop: '20px' }}>
-        <h3 style={{ color: '#333' }}>识别结果</h3>
+      {/* 识别结果展示区域 */}
+      <div style={{ 
+        borderTop: '1px solid #e5e7eb', 
+        paddingTop: '2rem' 
+      }}>
+        <h3 style={{ color: '#333', marginBottom: '1rem' }}>识别结果</h3>
+        
         {competitors.length === 0 ? (
-          <p style={{ color: '#666' }}>暂无竞品数据，请输入 URL 并点击识别</p>
+          <p style={{ color: '#64748b', textAlign: 'center', padding: '2rem 0' }}>
+            暂无竞品数据，请输入 URL 并点击识别
+          </p>
         ) : (
-          <ul style={{ listStyle: 'none', padding: 0 }}>
-            {competitors.map(item => (
-              <li 
+          <div style={{ 
+            border: '1px solid #e5e7eb', 
+            borderRadius: '8px',
+            overflow: 'hidden'
+          }}>
+            {competitors.map((item) => (
+              <div 
                 key={item.id} 
-                style={{ 
-                  padding: '10px', 
-                  borderBottom: '1px solid #eee',
+                style={{
+                  padding: '1rem',
                   display: 'flex',
                   justifyContent: 'space-between',
-                  alignItems: 'center'
+                  alignItems: 'center',
+                  borderBottom: '1px solid #f1f5f9'
                 }}
               >
-                <span style={{ fontWeight: '500', color: '#333' }}>{item.name}</span>
-                <span style={{ color: '#666', fontSize: '13px' }}>{item.url}</span>
-              </li>
+                <span style={{ 
+                  fontSize: '16px', 
+                  fontWeight: 500, 
+                  color: '#1e293b' 
+                }}>
+                  {item.name}
+                </span>
+                <span style={{ 
+                  fontSize: '14px', 
+                  color: '#64748b',
+                  wordBreak: 'break-all' 
+                }}>
+                  {item.url}
+                </span>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </div>
     </div>
