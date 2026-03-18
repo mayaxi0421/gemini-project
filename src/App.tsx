@@ -29,7 +29,7 @@ const App: React.FC = () => {
     setIsRecognizing(true);
     try {
       // 🔴 替换成你的真实 Google Gemini API Key（AIzaSy 开头）
-      const API_KEY = "你的真实API Key";
+      const API_KEY = "AIzaSyDYbrn2n5xofpo8g5uwAe_56Pbvfsyqm9w";
       const ai = new GoogleGenAI({ apiKey: API_KEY });
 
       const prompt = `I have a list of website URLs. Please identify the brand or company name for each URL.
