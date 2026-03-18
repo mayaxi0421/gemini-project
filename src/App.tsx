@@ -75,7 +75,7 @@ export default function App() {
 
     setIsRecognizing(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: "AIzaSyDYbrn2n5xofpo8g5uwAe_56Pbvfsyqm9w" });
       const prompt = `I have a list of website URLs. Please identify the brand or company name for each URL.
 Return ONLY a valid JSON array of objects with 'url' and 'name' properties. Do not include any markdown formatting or explanation.
 URLs:
