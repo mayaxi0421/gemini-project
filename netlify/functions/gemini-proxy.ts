@@ -54,7 +54,7 @@ ${urls.join('\n')}
 
     // 旧版 SDK 用 ai.models.generateContent 直接调用
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-1.0-pro',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
